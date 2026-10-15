@@ -17,6 +17,7 @@ import {
   quantityUnitsFor,
   type CategoryCatalog,
 } from '../constants';
+import { uploadMobileFile } from '../api/uploads';
 import { pickDocument } from '../files';
 import type { Route } from '../navigation/types';
 import { Body, Card, Checkbox, ChipSelect, Field, Notice, OptionList, PrimaryButton, SecondaryButton, Title } from '../ui';
@@ -92,7 +93,7 @@ export function CreateTenderScreen({ go }: { go: (route: Route) => void }) {
   const [hirePeriod, setHirePeriod] = useState('');
   const [allowDirectContact, setAllowDirectContact] = useState(false);
   const [allowProfessionalInterest, setAllowProfessionalInterest] = useState(false);
-  const [attachments, setAttachments] = useState<Array<{ name: string; mimeType: string; sizeBytes: number; dataBase64: string; kind: string }>>([]);
+  const [attachments, setAttachments] = useState<Array<{ name: string; mimeType: string; sizeBytes: number; uri: string; kind: string }>>([]);
   const [extraLines, setExtraLines] = useState<Array<{ category: string; subcategory: string; item: string; quantityAmount: string; quantityUnit: string }>>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -164,12 +165,15 @@ export function CreateTenderScreen({ go }: { go: (route: Route) => void }) {
           quantity: line.quantityUnit === 'not applicable' ? 'not applicable' : `${line.quantityAmount.trim()} ${line.quantityUnit}`,
           description: '',
         })),
-        attachments: attachments.map((attachment) => ({
-          name: attachment.name,
-          mimeType: attachment.mimeType,
-          sizeBytes: attachment.sizeBytes,
-          dataBase64: attachment.dataBase64,
-          kind: attachment.kind,
+        attachments: await Promise.all(attachments.map(async (attachment) => {
+          const uploaded = await uploadMobileFile(attachment, 'tender-attachment');
+          return {
+            name: uploaded.fileName,
+            mimeType: attachment.mimeType,
+            sizeBytes: attachment.sizeBytes,
+            uploadId: uploaded.uploadId,
+            kind: attachment.kind,
+          };
         })),
         allowDirectContact: isSiteVisitService(category) ? allowDirectContact : undefined,
         allowProfessionalInterest: isProfessionalService(category) ? allowProfessionalInterest : undefined,

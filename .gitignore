@@ -55,3 +55,5 @@ stress-test-results/
 
 # Local private attachment object store (not committed).
 data/attachments/
+data/attachments-temporary/
+data/attachments-archive/

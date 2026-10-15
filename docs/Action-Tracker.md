@@ -32,7 +32,7 @@ Actions below include the 2026-09-22 enterprise due-diligence recommendations. E
 
 ### Security and Compliance
 
-- [ ] Attach a Render persistent disk later for tender and verification files. App uploads already write to `ATTACHMENT_STORE_DIR` (local default `data/attachments`) instead of Postgres bytes; authorised session downloads and signature/PDF active-content checks are in code. When attaching: Starter or higher, mount `/var/data`, set `ATTACHMENT_STORE_DIR=/var/data/documents`. Outstanding after that: independent malware scanner. Disks are not available on free instances and pin a single instance.
+- [ ] Point production at a durable storage location (`ATTACHMENT_STORE_DIR` outside the default ephemeral directory, or `STORAGE_DRIVER` / `STORAGE_LOCATIONS`). Do not add a single-instance host disk as the durable store. Session downloads, checksums, and the export/relocate scripts are in place. Outstanding: independent malware scanner, and a verified backup of the export manifest.
 - [ ] Commission an independent web penetration test after live Stripe is proven; close Critical and High findings before wider access.
 - [ ] Execute processor DPAs (Render, Neon, Stripe, Resend, Sentry, Consulthub), a DPIA, and a DSAR/erasure runbook that covers database, files, backups, email, and observability stores.
 - [ ] Name deputies for deploy, Stripe, and incidents so production operations are not a single-person dependency.

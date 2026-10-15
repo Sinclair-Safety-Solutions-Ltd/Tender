@@ -6,9 +6,9 @@
 # Values marked `sync: false` are secrets or per-environment settings: set them in the Render
 # dashboard, never in git. See README "Environment origins" for the NEXTAUTH_URL of each service.
 # Database persistence is provided by Neon Lakebase Postgres, not a Render-managed database.
-# Document files use ATTACHMENT_STORE_DIR (local default data/attachments). A Render
-# persistent disk can be attached later: Starter or higher, mount /var/data, then set
-# ATTACHMENT_STORE_DIR=/var/data/documents. Disks are not available on free instances.
+# Document files use the storage port. Production must set a durable location
+# (ATTACHMENT_STORE_DIR outside the default directory, or STORAGE_DRIVER / STORAGE_LOCATIONS).
+# Do not add a Render disk; it pins a single instance. See docs/Storage-Migration-Runbook.md.
 
 services:
   - type: web

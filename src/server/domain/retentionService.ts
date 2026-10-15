@@ -1,5 +1,5 @@
 import { prisma } from '@/server/data/prisma';
-import { deleteStoredTenderAttachment } from '@/server/storage/tenderAttachmentStore';
+import { archiveOrDelete } from '@/server/storage/objectLifecycle';
 
 export const UNPURCHASED_QUOTE_RETENTION_DAYS = 30;
 export const PURCHASED_DOCUMENT_RETENTION_YEARS = 5;
@@ -43,7 +43,7 @@ export function expiredAttachmentPurgeWhere(cutoff: Date) {
   };
 }
 
-export async function purgeExpiredUnpurchasedQuotes(now = new Date()): Promise<{ quotesDeleted: number; documentsDeleted: number; emailVerificationTokensDeleted: number; passwordResetTokensDeleted: number; pageViewsDeleted: number }> {
+export async function purgeExpiredUnpurchasedQuotes(now = new Date()): Promise<{ quotesDeleted: number; documentsDeleted: number; temporaryObjectsDeleted: number; emailVerificationTokensDeleted: number; passwordResetTokensDeleted: number; pageViewsDeleted: number }> {
   const cutoff = getUnpurchasedQuoteCutoff(now);
   const quotes = await prisma.quote.findMany({
     where: expiredQuotePurgeWhere(cutoff),
@@ -52,7 +52,12 @@ export async function purgeExpiredUnpurchasedQuotes(now = new Date()): Promise<{
 
   const attachments = await prisma.tenderAttachment.findMany({
     where: expiredAttachmentPurgeWhere(cutoff),
-    select: { id: true, fileName: true, tenderId: true, uploadedAt: true, objectKey: true },
+    select: { id: true, fileName: true, tenderId: true, uploadedAt: true, objectKey: true, locationId: true, storedObjectId: true, checksum: true },
+  });
+  const temporaryCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const temporaryObjects = await prisma.storedObject.findMany({
+    where: { purpose: 'temporary', createdAt: { lt: temporaryCutoff } },
+    select: { id: true, storageKey: true, locationId: true, checksum: true },
   });
 
   const tokenCutoff = getCutoff(EXPIRED_AUTH_TOKEN_RETENTION_DAYS, now);
@@ -71,7 +76,6 @@ export async function purgeExpiredUnpurchasedQuotes(now = new Date()): Promise<{
       });
     }
     for (const attachment of attachments) {
-      await deleteStoredTenderAttachment(attachment.objectKey);
       await transaction.tenderAttachment.delete({ where: { id: attachment.id } });
       await transaction.auditLog.create({
         data: {
@@ -92,5 +96,12 @@ export async function purgeExpiredUnpurchasedQuotes(now = new Date()): Promise<{
     return { emailVerificationTokensDeleted: emailVerificationTokens.count, passwordResetTokensDeleted: passwordResetTokens.count, enhancedVerificationInvitationsDeleted: enhancedVerificationInvitations.count, pageViewsDeleted: pageViews.count };
   });
 
-  return { quotesDeleted: quotes.length, documentsDeleted: attachments.length, ...operationalData };
+  for (const attachment of attachments) {
+    await archiveOrDelete({ objectKey: attachment.objectKey, locationId: attachment.locationId, storedObjectId: attachment.storedObjectId, checksum: attachment.checksum });
+  }
+  for (const temporary of temporaryObjects) {
+    await archiveOrDelete({ objectKey: temporary.storageKey, locationId: temporary.locationId, storedObjectId: temporary.id, checksum: temporary.checksum });
+  }
+
+  return { quotesDeleted: quotes.length, documentsDeleted: attachments.length, temporaryObjectsDeleted: temporaryObjects.length, ...operationalData };
 }

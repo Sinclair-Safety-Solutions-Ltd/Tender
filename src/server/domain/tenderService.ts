@@ -14,6 +14,7 @@ import { serialiseSpec } from '@/lib/tender-spec';
 import { parseQuantity } from '@/lib/quote-pricing';
 import { hashPackageSpec, issuedTenderSpecHash } from '@/lib/package-spec';
 import { missingCredentials, type CredentialRecord } from '@/lib/package-credentials';
+import { storageTenantIdForUser } from '@/server/domain/stagedUpload';
 import { persistNewTenderAttachments } from '@/server/storage/tenderAttachmentStore';
 import { OPPORTUNITY_MATCH_READ_LIMIT, openMatchedOpportunityWhere, openOpportunityTenderWhere } from '@/lib/opportunity-search';
 
@@ -346,7 +347,7 @@ export async function createTender(clientId: string, input: CreateTenderInput) {
     }
   }
   if (!tender) throw new Error('Unable to allocate a unique tender reference');
-  await persistNewTenderAttachments(tender.id, input.attachments ?? []);
+  await persistNewTenderAttachments(tender.id, await storageTenantIdForUser(clientId), input.attachments ?? []);
 
   const packages = [
     {

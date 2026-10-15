@@ -48,7 +48,7 @@ export type MobileTenderCreation = {
   description: string;
   spec?: Record<string, unknown>;
   items?: Array<{ category: string; subcategory: string; item?: string; quantity: string; description?: string; spec?: Record<string, unknown> }>;
-  attachments?: Array<{ name: string; mimeType: string; sizeBytes: number; dataBase64: string; kind?: string }>;
+  attachments?: Array<{ name: string; mimeType: string; sizeBytes: number; uploadId: string; kind?: string }>;
   allowDirectContact?: boolean;
   allowProfessionalInterest?: boolean;
 };
