@@ -329,8 +329,12 @@ Update `eas.json` to use JS config:
 
 ```json
 {
-  "cli": {
-    "metadataPath": "./store.config.js"
+  "submit": {
+    "production": {
+      "ios": {
+        "metadataPath": "./store.config.js"
+      }
+    }
   }
 }
 ```

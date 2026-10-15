@@ -84,15 +84,12 @@ export async function enableBiometricLogin(email: string) {
 export async function disableBiometricLogin() {
   const meta = await loadBiometricMeta();
   if (meta) {
-    try {
-      await mobileApiFetch('/api/mobile/auth/devices/revoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deviceId: meta.deviceId }),
-      });
-    } catch {
-      // Local disable still proceeds so this device cannot keep using a protected refresh token.
-    }
+    const response = await mobileApiFetch('/api/mobile/auth/devices/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: meta.deviceId }),
+    });
+    if (!response.ok) throw new Error(await readErrorMessage(response, 'Unable to turn off biometric login.'));
   }
   await clearBiometricLogin();
 }

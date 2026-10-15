@@ -1,3 +1,10 @@
+### 2026-10-02 - Close required biometric opt-out and store-skill defects
+
+- Changed: eligible devices cannot skip enrolment or turn biometric login off while `MOBILE_BIOMETRIC_LOGIN_POLICY` is `required`; the disable API now fail-closes instead of clearing the vault after a 403. Sign-out still revokes the device. App icons no longer include a grey preview frame. EAS store-skill examples pass `build_id` and put `metadataPath` on the iOS submit profile.
+- Affects: `src/server/auth/mobileDevice.ts`, `mobile/src/api/auth.ts`, `mobile/src/api/client.ts`, `mobile/src/screens/BiometricEnrolment.tsx`, `mobile/src/screens/BiometricSettings.tsx`, `mobile/App.tsx`, `mobile/assets/icon.png`, `.agents/skills/eas-app-stores/references/workflows.md`.
+- Environment: no schema or secret change. Default policy stays `optional`.
+- Validation: `npx tsx --test tests/lib/mobile-biometric-auth.test.ts` and `npm test` in `mobile/`.
+
 ### 2026-10-01 - Unblock registration when verification email cannot send
 
 - Changed: registration records why verification email failed, uses the request host for the verify link, and in local development marks the account verified when Resend is not configured so sign-in can continue. Production still fail-closes until `RESEND_API_KEY` and a verified `EMAIL_FROM` are set.

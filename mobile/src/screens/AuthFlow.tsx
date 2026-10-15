@@ -18,7 +18,7 @@ export function AuthFlow({ onSignedIn }: { onSignedIn: (session: MobileSession) 
   return (
     <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
-        <Image accessibilityLabel="Trade Tender" source={require('../../assets/trade-tender-logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image alt="Trade Tender" accessibilityLabel="Trade Tender" source={require('../../assets/trade-tender-logo.png')} style={styles.logo} resizeMode="contain" />
       </View>
       <View style={styles.content}>
         <Eyebrow>Native mobile client</Eyebrow>

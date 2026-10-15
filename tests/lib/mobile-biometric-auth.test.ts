@@ -141,3 +141,45 @@ test('refresh rejects a device older than MOBILE_DEVICE_MAX_AGE_DAYS', async (co
   const listed = await listMobileDevices(user.id);
   assert.equal(listed.find((device) => device.id === registered.deviceId)?.biometricEnabled, false);
 });
+
+test('required policy refuses a settings disable but still allows logout', async (context) => {
+  const previousSecret = process.env.MOBILE_AUTH_SECRET;
+  process.env.MOBILE_AUTH_SECRET = 'a'.repeat(32);
+  const suffix = randomUUID();
+  let userId: string | undefined;
+  const originalPolicy = await prisma.platformSetting.findUnique({ where: { key: 'MOBILE_BIOMETRIC_LOGIN_POLICY' } });
+
+  context.after(async () => {
+    if (userId) {
+      await prisma.mobileDevice.deleteMany({ where: { userId } });
+      await prisma.user.deleteMany({ where: { id: userId } });
+    }
+    await restorePlatformSetting('MOBILE_BIOMETRIC_LOGIN_POLICY', originalPolicy);
+    process.env.MOBILE_AUTH_SECRET = previousSecret;
+  });
+
+  const user = await prisma.user.create({
+    data: {
+      email: `biometric-required-${suffix}@example.test`,
+      passwordHash: 'not-used',
+      role: 'USER',
+      contactName: 'Biometric Required User',
+      emailVerifiedAt: new Date(),
+    },
+  });
+  userId = user.id;
+  await prisma.platformSetting.upsert({
+    where: { key: 'MOBILE_BIOMETRIC_LOGIN_POLICY' },
+    update: { value: 'required' },
+    create: { key: 'MOBILE_BIOMETRIC_LOGIN_POLICY', value: 'required' },
+  });
+
+  const registered = await registerBiometricDevice(user.id, 'ios');
+  await assert.rejects(
+    () => revokeMobileDevice({ actorId: user.id, deviceId: registered.deviceId, reason: 'disabled' }),
+    ForbiddenError,
+  );
+  const revoked = await revokeMobileDevice({ actorId: user.id, deviceId: registered.deviceId, reason: 'logout' });
+  assert.equal(revoked, registered.deviceId);
+  await assert.rejects(() => refreshMobileDeviceSession(registered.refreshToken), UnauthorizedError);
+});

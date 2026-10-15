@@ -39,7 +39,7 @@ export function BiometricEnrolment({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onSkip]);
 
   if (!eligible) return null;
 
@@ -76,7 +76,7 @@ export function BiometricEnrolment({
       <Body>{BIOMETRIC_PRIVACY_COPY}</Body>
       <Notice>{message}</Notice>
       <PrimaryButton label={`Enable ${method}`} loading={busy} onPress={() => { void enable(); }} />
-      <SecondaryButton label="Not now" onPress={onSkip} />
+      {policy?.biometricLoginPolicy !== 'required' ? <SecondaryButton label="Not now" onPress={onSkip} /> : null}
     </>
   );
 }

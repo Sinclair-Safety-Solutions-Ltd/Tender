@@ -21,7 +21,7 @@ Trade Tender’s native app is Expo / React Native (`mobile/`). Web login stays 
 6. `POST /api/mobile/auth/devices` registers the device.
 7. The refresh token is written to biometric-protected SecureStore. The access token is kept in memory only while biometric login is enabled.
 
-Enrolment is never automatic. Policy `required` still leaves email/password available for devices without eligible biometrics.
+Enrolment is never automatic. On eligible devices, policy `required` hides skip and refuses a settings disable; email/password stays available for devices without eligible biometrics. Sign-out still revokes that device.
 
 ## Token and secure storage
 
@@ -91,7 +91,7 @@ Stored as `PlatformSetting` keys with defaults. There is no Owner UI in this cha
 - `MOBILE_INACTIVITY_TIMEOUT_SECONDS`: `0` (disabled; matches current product)
 - `MOBILE_STEP_UP_ACTIONS`: JSON array of action ids
 
-`required` does not lock out password login on devices without biometrics.
+`required` does not lock out password login on devices without biometrics. Eligible devices cannot skip enrolment or turn the setting off while the policy is `required`.
 
 Rooted/jailbroken-device blocking is **not** implemented. The existing security policy has no such control; adding a client-only detector would be theatre. Documented limitation.
 

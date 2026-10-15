@@ -1,62 +1,40 @@
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { locationForPurpose } from '@/server/storage/config';
+import { legacyVerificationDocumentObjectKey, tenderAttachmentObjectKey, verificationDocumentObjectKey } from '@/server/storage/keys';
+import { putForPurpose, readFromLocation } from '@/server/storage/objectLifecycle';
 
-const OBJECT_KEY_PATTERN = /^[A-Za-z0-9/_-]+$/;
+export { legacyVerificationDocumentObjectKey, tenderAttachmentObjectKey, verificationDocumentObjectKey };
 
 export function attachmentStoreRoot(): string {
-  return process.env.ATTACHMENT_STORE_DIR?.trim() || path.join(process.cwd(), 'data', 'attachments');
-}
-
-export function verificationDocumentObjectKey(profileId: string, documentType: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(profileId) || !/^[A-Za-z0-9_-]+$/.test(documentType)) {
-    throw new Error('Invalid attachment object key');
-  }
-  return `verification/${profileId}/${documentType}`;
-}
-
-export function tenderAttachmentObjectKey(tenderId: string, attachmentId: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(tenderId) || !/^[A-Za-z0-9_-]+$/.test(attachmentId)) {
-    throw new Error('Invalid attachment object key');
-  }
-  return `tenders/${tenderId}/${attachmentId}`;
-}
-
-function resolveStorePath(objectKey: string): string {
-  if (!OBJECT_KEY_PATTERN.test(objectKey) || objectKey.includes('..')) {
-    throw new Error('Invalid attachment object key');
-  }
-  const root = path.resolve(attachmentStoreRoot());
-  const resolved = path.resolve(root, objectKey);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
-    throw new Error('Invalid attachment object key');
-  }
-  return resolved;
+  return locationForPurpose('durable').root ?? '';
 }
 
 export async function putPrivateObject(objectKey: string, bytes: Buffer): Promise<void> {
-  const filePath = resolveStorePath(objectKey);
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, bytes);
+  await putForPurpose('durable', objectKey, bytes);
 }
 
 export async function getPrivateObject(objectKey: string): Promise<Buffer> {
-  return readFile(resolveStorePath(objectKey));
+  const bytes = await locationForPurpose('durable').store.get(objectKey);
+  if (!bytes) throw new Error('Object not found');
+  return bytes;
 }
 
 export async function deletePrivateObject(objectKey: string): Promise<void> {
-  try {
-    await unlink(resolveStorePath(objectKey));
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
+  await locationForPurpose('durable').store.delete(objectKey);
 }
 
-export async function readStoredObjectBytes(objectKey: string | null | undefined, content: Uint8Array | Buffer | null | undefined): Promise<Buffer | null> {
-  if (objectKey) {
-    try {
-      return await getPrivateObject(objectKey);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+export async function readStoredObjectBytes(
+  objectKey: string | null | undefined,
+  content: Uint8Array | Buffer | null | undefined,
+  locationId?: string | null,
+  extraKeys: string[] = [],
+): Promise<Buffer | null> {
+  const keys = [objectKey, ...extraKeys].filter((key): key is string => Boolean(key));
+  for (const key of keys) {
+    const bytes = await readFromLocation(locationId, key);
+    if (bytes) return bytes;
+    if (locationId) {
+      const durable = await locationForPurpose('durable').store.get(key);
+      if (durable) return durable;
     }
   }
   if (!content || content.length === 0) return null;

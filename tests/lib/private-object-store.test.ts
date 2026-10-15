@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { deletePrivateObject, getPrivateObject, putPrivateObject, tenderAttachmentObjectKey, verificationDocumentObjectKey } from '../../src/server/storage/privateObjectStore';
 import { readTenderAttachmentBytes } from '../../src/server/storage/tenderAttachmentStore';
-import { persistVerificationDocumentFile, readVerificationDocumentBytes } from '../../src/server/storage/verificationDocumentStore';
+import { readVerificationDocumentBytes } from '../../src/server/storage/verificationDocumentStore';
 
 test('object keys stay inside the private store', async () => {
   const previous = process.env.ATTACHMENT_STORE_DIR;
@@ -14,7 +14,8 @@ test('object keys stay inside the private store', async () => {
   process.env.ATTACHMENT_STORE_DIR = root;
   try {
     assert.equal(tenderAttachmentObjectKey('tender1', 'file1'), 'tenders/tender1/file1');
-    assert.equal(verificationDocumentObjectKey('profile1', 'PUBLIC_LIABILITY_INSURANCE'), 'verification/profile1/PUBLIC_LIABILITY_INSURANCE');
+    assert.equal(tenderAttachmentObjectKey('tender1', 'file1', 'tenant1'), 'tenants/tenant1/tenders/tender1/file1');
+    assert.equal(verificationDocumentObjectKey('profile1', 'PUBLIC_LIABILITY_INSURANCE'), 'tenants/profile1/verification/profile1/PUBLIC_LIABILITY_INSURANCE');
     assert.throws(() => tenderAttachmentObjectKey('../tender', 'file1'), /Invalid/);
     assert.throws(() => verificationDocumentObjectKey('../profile', 'PUBLIC_LIABILITY_INSURANCE'), /Invalid/);
     await assert.rejects(() => putPrivateObject('../secret', Buffer.from('no')), /Invalid/);
@@ -55,10 +56,13 @@ test('new tender attachments are stored privately and not as Postgres bytes', ()
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   assert.match(create, /persistNewTenderAttachments\(tender\.id/);
   assert.doesNotMatch(create, /content: Buffer\.from\(attachment\.dataBase64/);
-  assert.match(persist, /content: Buffer\.alloc\(0\)/);
-  assert.match(persist, /putPrivateObject/);
+  assert.match(persist, /writeDurableObject|promoteTemporaryUpload/);
+  assert.doesNotMatch(persist, /content: Buffer/);
   assert.doesNotMatch(snapshot, /contentBase64/);
-  assert.match(schema, /model TenderAttachment \{[\s\S]*content\s+Bytes\?/);
+  const attachmentModel = schema.match(/model TenderAttachment \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(attachmentModel, /checksum\s+String\?/);
+  assert.match(attachmentModel, /locationId\s+String\?/);
+  assert.doesNotMatch(attachmentModel, /content\s+Bytes/);
   assert.match(readFileSync('src/server/domain/tenderAttachmentService.ts', 'utf8'), /readTenderAttachmentBytes/);
 });
 
@@ -67,8 +71,7 @@ test('verification documents round-trip through the private store', async () => 
   const root = await mkdtemp(path.join(os.tmpdir(), 'tender-verification-'));
   process.env.ATTACHMENT_STORE_DIR = root;
   try {
-    const objectKey = await persistVerificationDocumentFile('profile1', 'PUBLIC_LIABILITY_INSURANCE', Buffer.from('%PDF-1.7'));
-    assert.equal(objectKey, 'verification/profile1/PUBLIC_LIABILITY_INSURANCE');
+    await putPrivateObject(verificationDocumentObjectKey('profile1', 'PUBLIC_LIABILITY_INSURANCE'), Buffer.from('%PDF-1.7'));
     const fromStore = await readVerificationDocumentBytes({ objectKey: null, content: Buffer.from('db-bytes') }, 'profile1', 'PUBLIC_LIABILITY_INSURANCE');
     assert.equal(fromStore?.toString(), '%PDF-1.7');
   } finally {
@@ -83,11 +86,14 @@ test('verification documents are stored privately and not as Postgres bytes', ()
   const persist = readFileSync('src/server/storage/verificationDocumentStore.ts', 'utf8');
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   assert.match(service, /persistVerificationDocumentFile/);
-  assert.match(service, /content: Buffer\.alloc\(0\)/);
+  assert.match(service, /objectKey: persisted.objectKey/);
   assert.match(service, /readVerificationDocumentBytes/);
-  assert.match(persist, /putPrivateObject/);
-  assert.match(schema, /model VerificationDocument \{[\s\S]*content\s+Bytes\?/);
-  assert.match(schema, /model VerificationDocument \{[\s\S]*objectKey\s+String\?/);
+  assert.match(persist, /writeDurableObject|promoteTemporaryUpload/);
+  assert.doesNotMatch(service, /content: Buffer/);
+  const documentModel = schema.match(/model VerificationDocument \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.match(documentModel, /objectKey\s+String\?/);
+  assert.match(documentModel, /checksum\s+String\?/);
+  assert.doesNotMatch(documentModel, /content\s+Bytes/);
 });
 
 test('Render blueprint stays on free until a persistent disk is attached later', () => {

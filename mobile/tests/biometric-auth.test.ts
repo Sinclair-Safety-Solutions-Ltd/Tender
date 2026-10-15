@@ -38,6 +38,19 @@ test('biometric login extends SecureStore and never stores a password', () => {
   assert.doesNotMatch(session, /passwordHash|currentPassword/);
 });
 
+test('required policy cannot skip enrolment or turn biometric login off on this device', () => {
+  const enrolment = readFileSync('src/screens/BiometricEnrolment.tsx', 'utf8');
+  const settings = readFileSync('src/screens/BiometricSettings.tsx', 'utf8');
+  const auth = readFileSync('src/api/auth.ts', 'utf8');
+  const client = readFileSync('src/api/client.ts', 'utf8');
+  const logout = client.slice(client.indexOf('export async function revokeMobileSession'));
+  assert.match(enrolment, /biometricLoginPolicy !== 'required'/);
+  assert.match(settings, /requiredEnabled/);
+  assert.match(auth, /Unable to turn off biometric login/);
+  assert.match(logout, /\/api\/mobile\/auth\/logout/);
+  assert.doesNotMatch(logout, /devices\/revoke/);
+});
+
 test('enrolment and settings copy stay optional and device-specific', () => {
   const enrolment = readFileSync('src/screens/BiometricEnrolment.tsx', 'utf8');
   const copy = readFileSync('src/auth/biometrics.ts', 'utf8');

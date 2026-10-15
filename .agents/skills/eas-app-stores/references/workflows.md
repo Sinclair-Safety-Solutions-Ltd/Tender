@@ -51,14 +51,14 @@ jobs:
     type: submit
     needs: [build-ios]
     params:
-      platform: ios
+      build_id: ${{ needs.build-ios.outputs.build_id }}
       profile: production
 
   submit-android:
     type: submit
     needs: [build-android]
     params:
-      platform: android
+      build_id: ${{ needs.build-android.outputs.build_id }}
       profile: production
 ```
 
@@ -96,17 +96,22 @@ on:
 
 jobs:
   check-changes:
-    type: run
-    params:
-      command: |
-        if git diff --name-only HEAD~1 | grep -q "^src/"; then
-          echo "has_changes=true" >> $GITHUB_OUTPUT
-        fi
+    outputs:
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - name: Detect source changes
+        id: detect
+        run: |
+          if git diff --name-only HEAD~1 | grep -q "^src/"; then
+            set-output has_changes true
+          else
+            set-output has_changes false
+          fi
 
   build:
     type: build
     needs: [check-changes]
-    if: needs.check-changes.outputs.has_changes == 'true'
+    if: ${{ needs.check-changes.outputs.has_changes == 'true' }}
     params:
       platform: all
       profile: production

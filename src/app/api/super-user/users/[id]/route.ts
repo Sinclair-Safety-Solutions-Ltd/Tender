@@ -330,6 +330,11 @@ export async function DELETE(request: Request, props: { params: Promise<{ id: st
     }, { status: 409 });
   }
 
+  const storedFiles = await prisma.verificationDocument.findMany({
+    where: { retailerProfile: { userId: user.id } },
+    select: { objectKey: true, locationId: true, storedObjectId: true },
+  });
+
   await prisma.$transaction(async (transaction) => {
     if (user.primaryClientCompany) {
       await transaction.clientCompany.delete({ where: { id: user.primaryClientCompany.id } });
@@ -349,6 +354,9 @@ export async function DELETE(request: Request, props: { params: Promise<{ id: st
       },
     });
   });
+
+  const { deleteStoredObjectRefs } = await import('@/server/storage/objectLifecycle');
+  await deleteStoredObjectRefs(storedFiles);
 
   return NextResponse.json({ status: 'deleted' });
 }

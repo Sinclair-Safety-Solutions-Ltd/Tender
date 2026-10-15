@@ -72,7 +72,8 @@ export function BiometricSettings({ email }: { email: string }) {
   }
 
   const enabled = status === 'enabled';
-  const toggleDisabled = busy || status === 'unavailable' || status === 'locked' || policy?.biometricLoginPolicy === 'disabled';
+  const requiredEnabled = policy?.biometricLoginPolicy === 'required' && enabled;
+  const toggleDisabled = busy || status === 'unavailable' || status === 'locked' || policy?.biometricLoginPolicy === 'disabled' || requiredEnabled;
 
   return (
     <Card>

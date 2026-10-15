@@ -3,7 +3,7 @@ import { SourceSans3_400Regular, SourceSans3_600SemiBold, useFonts as useSourceS
 import { StatusBar } from 'expo-status-bar';
 import * as ExpoLinking from 'expo-linking';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View, AppState } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { loadMobileSession, clearMobileSession, type MobileSession } from './src/auth/session';
@@ -117,6 +117,8 @@ export default function App() {
     }
   }
 
+  const skipEnrolment = useCallback(() => setOfferEnrolment(false), []);
+
   if (!appReady) return null;
 
   return (
@@ -150,8 +152,8 @@ export default function App() {
                 <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
                   <BiometricEnrolment
                     email={session.email}
-                    onEnabled={() => setOfferEnrolment(false)}
-                    onSkip={() => setOfferEnrolment(false)}
+                    onEnabled={skipEnrolment}
+                    onSkip={skipEnrolment}
                   />
                 </ScrollView>
               )
@@ -184,10 +186,10 @@ function Workspace({ session, onSignedOut }: { session: MobileSession; onSignedO
     return () => subscription.remove();
   }, []);
 
-  async function handleSignOut() {
+  const handleSignOut = useCallback(async () => {
     await revokeMobileSession();
     onSignedOut();
-  }
+  }, [onSignedOut]);
 
   const tab = tabForRoute(route);
   const nested = route.name !== 'dashboard' && route.name !== 'tenders' && route.name !== 'opportunities' && route.name !== 'profile';
@@ -206,13 +208,13 @@ function Workspace({ session, onSignedOut }: { session: MobileSession; onSignedO
       case 'profile': return <ProfileScreen email={session.email} go={setRoute} onSignOut={() => { void handleSignOut(); }} />;
       case 'support': return <SupportScreen />;
     }
-  }, [capabilities, pendingPayment, route, session.email]);
+  }, [capabilities, handleSignOut, pendingPayment, route, session.email]);
 
   if (session.role === 'SUPER_USER') {
     return (
       <View style={styles.content}>
         <View style={styles.header}>
-          <Image accessibilityLabel="Trade Tender" source={require('./assets/trade-tender-logo.png')} style={styles.logo} resizeMode="contain" />
+          <Image alt="Trade Tender" accessibilityLabel="Trade Tender" source={require('./assets/trade-tender-logo.png')} style={styles.logo} resizeMode="contain" />
         </View>
         <Title>Administration is on the web</Title>
         <Body>Owner and Super User tools stay on the Trade Tender website. This app is the Buyer and Supplier workspace.</Body>
@@ -224,7 +226,7 @@ function Workspace({ session, onSignedOut }: { session: MobileSession; onSignedO
   return (
     <View style={styles.workspace}>
       <View style={styles.header}>
-        <Image accessibilityLabel="Trade Tender" source={require('./assets/trade-tender-logo.png')} style={styles.logo} resizeMode="contain" />
+        <Image alt="Trade Tender" accessibilityLabel="Trade Tender" source={require('./assets/trade-tender-logo.png')} style={styles.logo} resizeMode="contain" />
       </View>
       <View style={styles.toolbar}>
         {nested && (

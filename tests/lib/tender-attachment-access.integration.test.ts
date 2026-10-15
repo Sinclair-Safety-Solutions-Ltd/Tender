@@ -4,6 +4,7 @@ import test from 'node:test';
 import { ForbiddenError } from '../../src/server/auth/session';
 import { prisma } from '../../src/server/data/prisma';
 import { getTenderAttachmentForDownload } from '../../src/server/domain/tenderAttachmentService';
+import { putPrivateObject } from '../../src/server/storage/privateObjectStore';
 import { getUnlockedTenderForRetailer } from '../../src/server/domain/unlockService';
 
 test('only the owning Client or a matched unlocked Retailer can retrieve a tender attachment', async (context) => {
@@ -57,12 +58,13 @@ test('only the owning Client or a matched unlocked Retailer can retrieve a tende
       closingDate: new Date(Date.now() + 86_400_000),
       requirements: 'Delivery',
       description: 'Fictional attachment access test tender',
-      attachments: { create: { fileName: 'site-plan.pdf', mimeType: 'application/pdf', sizeBytes: 4, content: Buffer.from('test') } },
+      attachments: { create: { fileName: 'site-plan.pdf', mimeType: 'application/pdf', sizeBytes: 4, objectKey: `tenders/${suffix}/plan` } },
     },
     include: { attachments: true },
   });
   tenderId = tender.id;
   const attachmentId = tender.attachments[0]!.id;
+  await putPrivateObject(`tenders/${suffix}/plan`, Buffer.from('test'));
   await prisma.tenderMatch.createMany({ data: [{ tenderId, retailerId }, { tenderId, retailerId: lockedRetailerId }] });
 
   await assert.rejects(

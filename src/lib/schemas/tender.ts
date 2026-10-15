@@ -10,11 +10,17 @@ const tenderAttachmentSchema = z.object({
   name: z.string().trim().min(1).max(255),
   mimeType: z.string().trim().min(1).max(128),
   sizeBytes: z.number().int().nonnegative(),
-  dataBase64: z.string().min(1).max(Math.ceil((10 * 1024 * 1024) * 4 / 3) + 4),
+  dataBase64: z.string().min(1).max(Math.ceil((10 * 1024 * 1024) * 4 / 3) + 4).optional(),
+  uploadId: z.string().trim().min(1).max(128).optional(),
   kind: z.enum(ATTACHMENT_KINDS).optional().default('OTHER'),
 }).transform((attachment, context) => {
+  if (attachment.uploadId && !attachment.dataBase64) return attachment;
+  if (!attachment.dataBase64) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Attachment upload is required', path: ['uploadId'] });
+    return z.NEVER;
+  }
   try {
-    return { ...attachment, ...verifyTenderAttachment(attachment) };
+    return { ...attachment, ...verifyTenderAttachment({ ...attachment, dataBase64: attachment.dataBase64 }) };
   } catch (error) {
     context.addIssue({
       code: z.ZodIssueCode.custom,

@@ -26,7 +26,7 @@ This document describes the target production architecture. The existing reposit
 - **Payments:** Stripe through server-side integrations and verified webhooks.
 - **CI/CD:** GitHub Actions for validation; Render deploys from the connected git branch.
 - **Transactional email:** Approved email provider, such as the service described in the business plan.
-- **Files:** Private object storage accessed through authorized server-controlled URLs. The Render application filesystem is ephemeral and must not be used for durable attachments.
+- **Files:** Private object storage behind a provider-independent port. Session-authorized downloads are the default. Short-lived URLs are optional when `STORAGE_DIRECT_URLS` is enabled. The application filesystem default is ephemeral and must not hold durable attachments.
 
 No technology or service addition should expand the approved product scope without review against the business plan.
 
@@ -237,7 +237,7 @@ All schema changes require a reviewed migration. Unique constraints should prote
 - Store attachments in private object storage, not a public web root.
 - Validate authenticated ownership, file size, extension, MIME type, content signature, and business context server-side.
 - Normalize names and prevent path traversal, active content, oversized archives, and unsafe previews.
-- Issue short-lived authorized download URLs only after the visibility state permits access.
+- Serve downloads through the authorized application route. A driver may offer a short-lived URL only after that same authorization check, and only when direct URLs are explicitly enabled.
 - Do not enumerate, preview, cache, or expose Provider attachments before unlock.
 - Record security-relevant upload, access, rejection, release, and deletion events.
 
@@ -256,7 +256,7 @@ Exports require the same authorization and privacy checks as the dashboard. Cont
 ## 15. Deployment Architecture
 
 - GitHub Actions runs type checking, relevant tests, security checks, and a production build.
-- Render hosts the Next.js application with environment-specific configuration. Relational persistence is Neon Lakebase Postgres (`DATABASE_URL` / `DATABASE_URL_UNPOOLED`), not a Render-managed database. Tender attachments and verification PDFs write to `ATTACHMENT_STORE_DIR` (local default `data/attachments`; a Render disk at `/var/data/documents` when one is attached).
+- Render hosts the Next.js application with environment-specific configuration. Relational persistence is Neon Lakebase Postgres (`DATABASE_URL` / `DATABASE_URL_UNPOOLED`), not a Render-managed database. Tender attachments and verification PDFs go through the storage port. Durable, temporary, and archive locations are selected by configuration (`STORAGE_DRIVER` or `STORAGE_LOCATIONS`), not by a host disk. Production refuses the default `data/attachments` directory. See `docs/Storage-Migration-Runbook.md`.
 - Database migrations run through `prisma migrate deploy` as an approved, ordered deployment step.
 - Secrets are supplied through GitHub Actions secrets or Render environment variables marked as non-syncing.
 - Development, test, staging, and production settings and data remain separated.

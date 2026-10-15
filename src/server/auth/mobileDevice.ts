@@ -178,6 +178,9 @@ export async function refreshMobileDeviceSession(refreshToken: string) {
 }
 
 export async function revokeMobileDevice(input: { actorId?: string; deviceId?: string; refreshToken?: string; reason?: 'logout' | 'disabled' | 'replaced' }) {
+  if (input.reason === 'disabled' && (await getMobileAuthPolicy()).biometricLoginPolicy === 'required') {
+    throw new ForbiddenError();
+  }
   const device = input.refreshToken
     ? await prisma.mobileDevice.findUnique({ where: { refreshTokenHash: hashMobileRefreshToken(input.refreshToken) } })
     : input.deviceId && input.actorId

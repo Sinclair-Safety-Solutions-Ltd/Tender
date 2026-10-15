@@ -69,7 +69,7 @@ export async function revokeMobileSession() {
     try {
       const vault = await readBiometricVault();
       if (vault) {
-        await fetch(`${mobileApiBaseUrl()}/api/mobile/auth/devices/revoke`, {
+        await fetch(`${mobileApiBaseUrl()}/api/mobile/auth/logout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: vault.refreshToken }),

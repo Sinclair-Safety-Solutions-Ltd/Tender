@@ -5,6 +5,9 @@ import { getApplicableVerificationDocuments, getRequiredVerificationDocumentType
 import type { UploadVerificationDocumentInput } from '@/lib/schemas/verificationDocument';
 import { assessVerificationDocument } from '@/server/domain/verificationAiAssessment';
 import { getVerificationDocumentRequirements } from '@/server/domain/platformSettings';
+import { storageTenantIdForUser } from '@/server/domain/stagedUpload';
+import { locationById, locationForPurpose } from '@/server/storage/config';
+import { deleteStoredObjectRefs } from '@/server/storage/objectLifecycle';
 import { deleteStoredVerificationDocument, persistVerificationDocumentFile, readVerificationDocumentBytes } from '@/server/storage/verificationDocumentStore';
 
 const verificationAssessmentSelect = {
@@ -49,7 +52,22 @@ export async function uploadVerificationDocument(userId: string, input: UploadVe
     throw new ForbiddenError('This document is not applicable to the services offered by this account');
   }
 
-  const content = Buffer.from(input.dataBase64, 'base64');
+  const ownerTenantId = await storageTenantIdForUser(userId);
+  const existing = await prisma.verificationDocument.findUnique({
+    where: { retailerProfileId_documentType: { retailerProfileId: profile.id, documentType: input.documentType as VerificationDocumentType } },
+    select: { objectKey: true, locationId: true, storedObjectId: true },
+  });
+  if (existing?.storedObjectId) {
+    await prisma.storedObject.delete({ where: { id: existing.storedObjectId } }).catch(() => undefined);
+  }
+  const persisted = await persistVerificationDocumentFile(profile.id, input.documentType, input.dataBase64 ? Buffer.from(input.dataBase64, 'base64') : Buffer.alloc(0), {
+    fileName: input.name,
+    mimeType: input.mimeType,
+    uploadId: input.uploadId,
+    ownerTenantId,
+  });
+  const content = await readVerificationDocumentBytes({ objectKey: persisted.objectKey, locationId: persisted.locationId }, profile.id, input.documentType);
+  if (!content) throw new ForbiddenError('Document is not available');
   const assessment = assessVerificationDocument({
     documentType: input.documentType as VerificationDocumentType,
     mimeType: input.mimeType,
@@ -60,12 +78,15 @@ export async function uploadVerificationDocument(userId: string, input: UploadVe
     address: profile.address,
   });
 
-  await persistVerificationDocumentFile(profile.id, input.documentType, content);
   const data = {
     fileName: input.name,
     mimeType: input.mimeType,
-    sizeBytes: input.sizeBytes,
-    content: Buffer.alloc(0),
+    sizeBytes: persisted.sizeBytes,
+    objectKey: persisted.objectKey,
+    checksum: persisted.checksum,
+    locationId: persisted.locationId,
+    tenantId: profile.id,
+    storedObjectId: persisted.storedObjectId,
     expiryDate: input.expiryDate,
     aiConfidencePercent: assessment.confidencePercent,
     aiSummary: assessment.summary,
@@ -80,14 +101,21 @@ export async function uploadVerificationDocument(userId: string, input: UploadVe
     create: { retailerProfileId: profile.id, documentType: input.documentType as VerificationDocumentType, ...data },
     select: { documentType: true, fileName: true, mimeType: true, sizeBytes: true, expiryDate: true, uploadedAt: true },
   });
+  if (existing?.objectKey && existing.objectKey !== persisted.objectKey) {
+    await deleteStoredObjectRefs([{ objectKey: existing.objectKey, locationId: existing.locationId }]);
+  }
   await recordAuditEvent({ actorId: userId, action: 'PROVIDER_VERIFICATION_DOCUMENT_UPLOADED', targetType: 'RetailerProfile', targetId: profile.id, metadata: { documentType: input.documentType } });
   return document;
 }
 
 export async function deleteVerificationDocument(userId: string, documentType: VerificationDocumentType) {
   const profile = await getOwnRetailerProfileOrThrow(userId);
+  const existing = await prisma.verificationDocument.findUnique({
+    where: { retailerProfileId_documentType: { retailerProfileId: profile.id, documentType } },
+    select: { objectKey: true, locationId: true, storedObjectId: true },
+  });
   await prisma.verificationDocument.deleteMany({ where: { retailerProfileId: profile.id, documentType } });
-  await deleteStoredVerificationDocument(profile.id, documentType);
+  await deleteStoredVerificationDocument(profile.id, documentType, existing ?? undefined);
   await recordAuditEvent({ actorId: userId, action: 'PROVIDER_VERIFICATION_DOCUMENT_DELETED', targetType: 'RetailerProfile', targetId: profile.id, metadata: { documentType } });
 }
 
@@ -103,7 +131,7 @@ export async function getVerificationDocumentForDownload(retailerUserId: string,
 
   const document = await prisma.verificationDocument.findUnique({
     where: { retailerProfileId_documentType: { retailerProfileId: profile.id, documentType } },
-    select: { id: true, fileName: true, mimeType: true, content: true },
+    select: { id: true, fileName: true, mimeType: true, objectKey: true, locationId: true },
   });
   if (!document) throw new ForbiddenError('Document is not available');
 
@@ -111,7 +139,11 @@ export async function getVerificationDocumentForDownload(retailerUserId: string,
   if (!content) throw new ForbiddenError('Document is not available');
 
   await recordAuditEvent({ actorId: actor.id, action: 'PROVIDER_VERIFICATION_DOCUMENT_DOWNLOADED', targetType: 'RetailerProfile', targetId: profile.id, metadata: { documentType } });
-  return { id: document.id, fileName: document.fileName, mimeType: document.mimeType, content };
+  const store = (document.locationId ? locationById(document.locationId)?.store : null) ?? locationForPurpose('durable').store;
+  const downloadUrl = process.env.STORAGE_DIRECT_URLS === 'true' && document.objectKey
+    ? await store.createDownloadUrl(document.objectKey, 120)
+    : null;
+  return { id: document.id, fileName: document.fileName, mimeType: document.mimeType, content, downloadUrl };
 }
 
 export type VerificationEvaluation = {
