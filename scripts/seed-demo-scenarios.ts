@@ -138,13 +138,23 @@ async function ensureRetailerScenario(input: {
 
 async function addDemoVerificationDocument(profileId: string, documentType: 'PUBLIC_LIABILITY_INSURANCE' | 'CERTIFICATE_OF_INCORPORATION' | 'EMPLOYERS_LIABILITY_INSURANCE' | 'SSIP_ACCREDITATION', expiryDays: number, verified = true) {
   const expiryDate = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
+  const bytes = Buffer.from('%PDF-1.7\ndemo-document-content');
+  const { persistVerificationDocumentFile } = await import('../src/server/storage/verificationDocumentStore');
+  const stored = await persistVerificationDocumentFile(profileId, documentType, bytes, {
+    fileName: `${documentType.toLowerCase()}.pdf`,
+    mimeType: 'application/pdf',
+  });
   await prisma.verificationDocument.upsert({
     where: { retailerProfileId_documentType: { retailerProfileId: profileId, documentType } },
     update: {
       fileName: `${documentType.toLowerCase()}.pdf`,
       mimeType: 'application/pdf',
-      sizeBytes: 1024,
-      content: Buffer.from('demo-document-content'),
+      sizeBytes: stored.sizeBytes,
+      objectKey: stored.objectKey,
+      checksum: stored.checksum,
+      locationId: stored.locationId,
+      tenantId: profileId,
+      storedObjectId: stored.storedObjectId,
       expiryDate,
       aiConfidencePercent: 96,
       aiSummary: 'Demo assessment accepted for scenario seed.',
@@ -157,8 +167,12 @@ async function addDemoVerificationDocument(profileId: string, documentType: 'PUB
       documentType,
       fileName: `${documentType.toLowerCase()}.pdf`,
       mimeType: 'application/pdf',
-      sizeBytes: 1024,
-      content: Buffer.from('demo-document-content'),
+      sizeBytes: stored.sizeBytes,
+      objectKey: stored.objectKey,
+      checksum: stored.checksum,
+      locationId: stored.locationId,
+      tenantId: profileId,
+      storedObjectId: stored.storedObjectId,
       expiryDate,
       aiConfidencePercent: 96,
       aiSummary: 'Demo assessment accepted for scenario seed.',

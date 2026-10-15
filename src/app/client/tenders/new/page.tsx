@@ -681,18 +681,25 @@ function NewTenderForm() {
   async function prepareAttachments() {
     return Promise.all(
       files.map(async (entry) => {
-        const arrayBuffer = await entry.file.arrayBuffer();
-        const bytes = new Uint8Array(arrayBuffer);
-        let binary = '';
-        bytes.forEach((byte) => {
-          binary += String.fromCharCode(byte);
+        const name = buildSafeAttachmentName(entry.file.name);
+        const mimeType = entry.file.type || 'application/octet-stream';
+        const response = await fetch('/api/uploads', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/octet-stream',
+            'x-file-name': name,
+            'x-file-mime': mimeType,
+            'x-upload-purpose': 'tender-attachment',
+          },
+          body: entry.file,
         });
-
+        const body = await response.json().catch(() => null) as { uploadId?: string; error?: string } | null;
+        if (!response.ok || !body?.uploadId) throw new Error(body?.error ?? 'Unable to upload an attachment.');
         return {
-          name: buildSafeAttachmentName(entry.file.name),
-          mimeType: entry.file.type || 'application/octet-stream',
+          name,
+          mimeType,
           sizeBytes: entry.file.size,
-          dataBase64: btoa(binary),
+          uploadId: body.uploadId,
           kind: entry.kind,
         };
       })

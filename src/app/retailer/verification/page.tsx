@@ -22,19 +22,6 @@ type UploadedDocument = {
   uploadedAt: string;
 };
 
-async function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result ?? '');
-      const comma = result.indexOf(',');
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.onerror = () => reject(reader.error ?? new Error('Unable to read this PDF.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 function formatFileSize(sizeBytes: number) {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
   if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(0)} KB`;
@@ -123,22 +110,37 @@ export default function ProviderVerificationPage() {
     setError(null);
     setMessage(null);
     try {
-      const dataBase64 = await fileToBase64(file);
+      const name = buildSafeAttachmentName(file.name);
+      const staged = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/octet-stream',
+          'x-file-name': name,
+          'x-file-mime': 'application/pdf',
+          'x-upload-purpose': 'verification-document',
+        },
+        body: file,
+      });
+      const stagedBody = await staged.json().catch(() => null) as { uploadId?: string; error?: string } | null;
+      if (!staged.ok || !stagedBody?.uploadId) {
+        setError(stagedBody?.error ?? 'Unable to upload this document.');
+        return;
+      }
       const response = await fetch('/api/retailer/verification/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           documentType,
-          name: buildSafeAttachmentName(file.name),
+          name,
           mimeType: 'application/pdf',
           sizeBytes: file.size,
-          dataBase64,
+          uploadId: stagedBody.uploadId,
           ...(expires ? { expiryDate } : {}),
         }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
-        setError(data?.issues?.fieldErrors?.dataBase64?.[0] ?? data?.issues?.fieldErrors?.expiryDate?.[0] ?? data?.error ?? 'Unable to upload this document.');
+        setError(data?.issues?.fieldErrors?.expiryDate?.[0] ?? data?.error ?? 'Unable to upload this document.');
         return;
       }
       setDocuments((current) => [...current.filter((doc) => doc.documentType !== documentType), data.document]);

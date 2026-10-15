@@ -4,6 +4,7 @@ import { loadOpportunities, type MobileOpportunitySummary } from '../api/opportu
 import { loadIndependentReview, loadVerificationDocuments, purchaseIndependentReview, submitVerification, uploadVerificationDocument, type IndependentReviewPayload, type VerificationDocumentsPayload } from '../api/verification';
 import { loadSubmittedQuotes, type SubmittedQuoteRow } from '../api/workspace';
 import { formatUkDate } from '../constants';
+import { uploadMobileFile } from '../api/uploads';
 import { pickVerificationDocument } from '../files';
 import type { Route } from '../navigation/types';
 import { Body, Card, Field, Notice, OptionList, PrimaryButton, SecondaryButton, Title } from '../ui';
@@ -105,12 +106,13 @@ export function VerificationScreen() {
           <SecondaryButton label="Upload document" onPress={() => {
             pickVerificationDocument().then(async (picked) => {
               if (!picked || !documentType) return;
+              const uploaded = await uploadMobileFile(picked, 'verification-document');
               await uploadVerificationDocument({
                 documentType,
-                name: picked.name,
+                name: uploaded.fileName,
                 mimeType: picked.mimeType,
-                sizeBytes: picked.sizeBytes,
-                dataBase64: picked.dataBase64,
+                sizeBytes: picked.sizeBytes || uploaded.sizeBytes,
+                uploadId: uploaded.uploadId,
                 expiryDate: expiryDate || undefined,
               });
               setMessage('Document uploaded.');

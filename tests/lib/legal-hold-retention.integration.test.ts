@@ -37,7 +37,7 @@ test('active legal holds exclude expired quotes and tender attachments until rel
   tenderId = tender.id;
   const [quote, attachment] = await Promise.all([
     prisma.quote.create({ data: { reference: `HOLD-${suffix}-Q01`, tenderId, retailerId, priceGbp: 1000, leadTimeDays: 2, deliveryInfo: 'Fictional test delivery', validityDays: 14, submittedAt: new Date('2026-01-01T00:00:00.000Z') } }),
-    prisma.tenderAttachment.create({ data: { tenderId, fileName: 'hold-test.pdf', mimeType: 'application/pdf', sizeBytes: 5, content: Buffer.from('%PDF-'), uploadedAt: new Date('2026-01-01T00:00:00.000Z') } }),
+    prisma.tenderAttachment.create({ data: { tenderId, fileName: 'hold-test.pdf', mimeType: 'application/pdf', sizeBytes: 5, uploadedAt: new Date('2026-01-01T00:00:00.000Z') } }),
   ]);
   quoteId = quote.id;
   attachmentId = attachment.id;

@@ -20,7 +20,7 @@ export async function uploadVerificationDocument(input: {
   name: string;
   mimeType: string;
   sizeBytes: number;
-  dataBase64: string;
+  uploadId: string;
   expiryDate?: string;
 }) {
   const response = await mobileApiFetch('/api/retailer/verification/documents', {

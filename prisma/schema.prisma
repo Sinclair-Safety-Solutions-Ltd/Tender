@@ -564,6 +564,26 @@ enum ProviderVerificationDocumentType {
 }
 
 /** One uploaded evidence file per document type/slot; re-uploading replaces the prior file for that slot. */
+model StoredObject {
+  id           String   @id @default(cuid())
+  storageKey   String
+  locationId   String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  checksum     String
+  purpose      String
+  tenantId     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenderAttachment       TenderAttachment?
+  verificationDocument   VerificationDocument?
+
+  @@unique([locationId, storageKey])
+  @@index([tenantId, purpose, createdAt])
+}
+
 model VerificationDocument {
   id                String                           @id @default(cuid())
   retailerProfileId String
@@ -572,8 +592,12 @@ model VerificationDocument {
   fileName          String
   mimeType          String
   sizeBytes         Int
-  content           Bytes?
   objectKey         String?
+  checksum          String?
+  locationId        String?
+  tenantId          String?
+  storedObjectId    String?                          @unique
+  storedObject      StoredObject?                    @relation(fields: [storedObjectId], references: [id], onDelete: SetNull)
   expiryDate        DateTime?
   aiConfidencePercent Int?
   aiSummary           String? // Super User visibility only, never returned to the Provider
@@ -728,11 +752,15 @@ model TenderAttachment {
   fileName    String
   mimeType    String
   sizeBytes   Int
-  content     Bytes?
   kind        AttachmentKind @default(OTHER)
   version     Int      @default(1)
   packageIndex Int?
   objectKey   String?
+  checksum    String?
+  locationId  String?
+  tenantId    String?
+  storedObjectId String? @unique
+  storedObject StoredObject? @relation(fields: [storedObjectId], references: [id], onDelete: SetNull)
   uploadedAt  DateTime @default(now())
   retentionLockedUntil DateTime?
   legalHolds  LegalHold[] @relation("LegalHoldTenderAttachment")
